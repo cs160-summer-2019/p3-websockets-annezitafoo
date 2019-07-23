@@ -7,9 +7,13 @@
     <title>P4 Drawing</title>
 
     <link rel="stylesheet" type="text/css" href="{% static 'draw/vendor/bootstrap/css/bootstrap.min.css' %}">
-    <script type="text/javascript" src="{% static 'draw/vendor/jquery/jquery-3.3.1.min.js' %}"></script>
+<!--     <script type="text/javascript" src="{% static 'draw/vendor/jquery/jquery-3.3.1.min.js' %}"></script> -->
     <script type="text/javascript" src="{% static 'draw/vendor/paper/paper-full.min.js' %}"></script>
-
+    <script
+        src="https://code.jquery.com/jquery-3.4.1.min.js"
+        integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo="
+        crossorigin="anonymous">
+    </script>
     <style type="text/css">
     </style>
 
@@ -17,20 +21,81 @@
 <body>
     <!-- You may change the dimensions of this canvas -->
     <canvas id="myCanvas" width="750px" height="750px"></canvas>
+    <div class="desc" style="visibility: hidden">Rotation - <br>α: <span id="a"></span>°/s, <br>β: <span id="b"></span> °/s, <br>γ: <span id="c"></span>°/s</div>
 </body>
 <script>
+   //(document).ready(() => {
+        // create a new websocket connecting to the server
+        var socket = new WebSocket('wss://p3-websockets-annezitafoo-annezitafoo583222.codeanyapp.com/ws/draw');
 
-    // setting up the canvas and one paper tool
-    var canvas = document.getElementById('myCanvas');
-    paper.setup(canvas);
-    var tool = new paper.Tool();
+        // setting up the canvas and one paper tool
+        var canvas = document.getElementById('myCanvas');
+        paper.setup(canvas);
+        var myID = self.$.expando;
+        var path = {};
+        var tool = new paper.Tool();
+        var myColour = 'hsl(' + Math.random() * 360  + 'deg, 100%, 75%)';
+        var changed = true;
+        // triggered when receiving a message from the server
+        socket.onmessage = function(receivedMessage) {
+            var data = JSON.parse(receivedMessage.data);
+            if (data.id != myID && window.location.href.indexOf("?size=large") > -1) {
+                console.log(data);
+                console.log(path);
+                if (data.colour) {
+                    path[data.id] = new paper.Path({
+                        strokeColor: data.colour,
+                        strokeWidth: 5
+                    })
+                }
+                if (data.point) {
+                    path[data.id].add(new paper.Point(data.point[0], data.point[1]));
+                }
+            }
+        };
 
-    // getting the URL (you may want to use for Exercise 3)
-    var url = window.location.href;
+        // notify console if socket closes unexpectedly
+        socket.onclose = function(e) {
+            console.error('Chat socket closed unexpectedly');
+        };
 
-    // var socket = new WebSocket(
-    //     'wss://<your url here>/ws/draw');
+        tool.onMouseDown = function() {
+            path[myID] = new paper.Path({
+                strokeColor: myColour,
+                strokeWidth: 5
+            });
+            socket.send(JSON.stringify({id: myID, colour: myColour}));
+            changed = true;
+        };
 
-
+        tool.onMouseDrag = function(e) {
+            path[myID].add(e.point);
+            socket.send(JSON.stringify({id: myID, point: [e.point.x, e.point.y]}));
+        };
+                
+        if (window.location.href.indexOf("?size=small") > -1) {
+            $('.desc').css({visibility: "visible"});
+            
+             window.addEventListener ('devicemotion', (e) => {
+                 var angles = [e.rotationRate.alpha, e.rotationRate.beta, e.rotationRate.gamma];
+                 $('#a').text(Math.round(angles[0])); //Somehow the directions seem flipped on the device used 
+                 $('#b').text(Math.round(angles[1]));
+                 $('#c').text(Math.round(angles[2]));
+                 if (Math.abs(angles[2]) > Math.abs(angles[0]) && Math.abs(angles[2]) > Math.abs(angles[1])) {
+                     if (Math.abs(angles[2]) > 100 && paper.project.layers[0].hasChildren()) {
+                         alert('Clearing');
+                         paper.project.layers[0].removeChildren();
+                     }
+                 }
+                 else if (Math.abs(angles[1]) > Math.abs(angles[0]) && Math.abs(angles[1]) > Math.abs(angles[2])) {
+                     if (angles[1] < -100 && changed) {
+                         alert('Colour Change');
+                         changed = false;
+                         myColour = 'hsl(' + Math.random() * 360  + 'deg, 100%, 75%)';
+                     }
+                 }
+            });
+        }
+    //;
 </script>
 </html>
